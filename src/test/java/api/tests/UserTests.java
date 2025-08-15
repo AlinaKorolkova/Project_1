@@ -2,6 +2,7 @@ package api.tests;
 
 import api.clients.UserClient;
 import api.models.AuthResponse;
+import api.models.ErrorResponse;
 import api.models.User;
 import api.utils.DataGenerator;
 import io.qameta.allure.junit4.DisplayName;
@@ -10,6 +11,8 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.equalTo;
 import static org.junit.Assert.*;
 
 public class UserTests {
@@ -18,7 +21,7 @@ public class UserTests {
     private String accessToken;
 
     @Before
-    public void setUp() {
+    public void prepare() {
         userClient = new UserClient();
         user = DataGenerator.getRandomUser();
     }
@@ -46,30 +49,40 @@ public class UserTests {
 
     @Test
     @DisplayName("Создание пользователя с уже существующим email")
-    public void testCreateUserWithExistingEmail() {
-        User existingUser = DataGenerator.getExistingUser();
-        Response response = userClient.createUser(existingUser);
-        response.then().statusCode(403);
+    public void shouldReturnErrorWhenUserWithSameEmailAlreadyExists() {
+        // Arrange
+        User testUser = DataGenerator.getRandomUser();
+        userClient.createUser(testUser)
+                .then()
+                .statusCode(200)
+                .body("success", equalTo(true));
 
-        assertEquals("User already exists", response.path("message"));
-        assertFalse(response.path("success"));
+        ErrorResponse expectedError = ErrorResponse.builder()
+                .success(false)
+                .message("User already exists")
+                .build();
+        Response response = userClient.createUser(testUser);
+
+        ErrorResponse actualError = response.as(ErrorResponse.class);
+
+        assertThat(actualError)
+                .usingRecursiveComparison()
+                .ignoringFields("timestamp")
+                .isEqualTo(expectedError);
+
+        response.then().statusCode(403);
     }
 
-    @Test
-    @DisplayName("Создание пользователя без email")
-    public void testCreateUserWithoutEmail() {
-        user.setEmail(null);
-        Response response = userClient.createUser(user);
-        response.then().statusCode(403);
-
-        assertEquals("Email, password and name are required fields", response.path("message"));
-        assertFalse(response.path("success"));
+    @Before
+    public void sprepare() {
+        userClient = new UserClient();
+        user = DataGenerator.getRandomUser();
+        userClient.createUser(user).then().statusCode(200);
     }
 
     @Test
     @DisplayName("Авторизация пользователя с валидными данными")
     public void testLoginWithValidData() {
-        userClient.createUser(user);
         Response response = userClient.login(user);
         response.then().statusCode(200);
 
@@ -77,11 +90,11 @@ public class UserTests {
         assertTrue(authResponse.isSuccess());
         assertNotNull(authResponse.getAccessToken());
 
-        accessToken = authResponse.getAccessToken();
+        accessToken = authResponse.getAccessToken(); // для удаления в @After
     }
 
     @Test
-    @DisplayName("Авторизация с неверным паролем")
+    @DisplayName("Авторизация пользователя с неверным паролем")
     public void testLoginWithInvalidPassword() {
         userClient.createUser(user);
         user.setPassword("wrongpassword");
@@ -90,24 +103,24 @@ public class UserTests {
 
         assertEquals("email or password are incorrect", response.path("message"));
         assertFalse(response.path("success"));
-
-        accessToken = null; // чтобы не удалять пользователя в tearDown
     }
 
-    @Test
     @DisplayName("Обновление данных пользователя с авторизацией")
     public void testUpdateUserWithAuth() {
         AuthResponse authResponse = userClient.loginAndGetAuthResponse(user);
         accessToken = authResponse.getAccessToken();
 
-        user.setName("NewName");
-        user.setEmail("newemail@example.com");
+        String expectedName = "UpdatedUserName";
+        String expectedEmail = "updated.user@example.com";
+
+        user.setName(expectedName);
+        user.setEmail(expectedEmail);
 
         Response response = userClient.updateUser(user, accessToken);
         response.then().statusCode(200);
 
-        assertEquals("NewName", response.path("user.name"));
-        assertEquals("newemail@example.com", response.path("user.email"));
+        assertEquals(expectedName, response.path("user.name"));
+        assertEquals(expectedEmail, response.path("user.email"));
     }
 
     @Test
@@ -121,5 +134,20 @@ public class UserTests {
 
         assertEquals("You should be authorised", response.path("message"));
         assertFalse(response.path("success"));
+    }
+
+    @Test
+    @DisplayName("Создание пользователя без email")
+    public void testCreateUserWithoutEmail() {
+        User userWithoutEmail = DataGenerator.getRandomUser();
+        userWithoutEmail.setEmail(null);
+
+        Response response = userClient.createUser(userWithoutEmail);
+
+        response.then().statusCode(403);
+
+        ErrorResponse errorResponse = response.as(ErrorResponse.class);
+        assertEquals("Email, password and name are required fields", errorResponse.getMessage());
+        assertFalse(errorResponse.isSuccess());
     }
 }

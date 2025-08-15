@@ -2,10 +2,7 @@ package api.tests;
 
 import api.clients.OrderClient;
 import api.clients.UserClient;
-import api.models.AuthResponse;
-import api.models.Order;
-import api.models.OrderResponse;
-import api.models.User;
+import api.models.*;
 import api.utils.DataGenerator;
 import io.qameta.allure.junit4.DisplayName;
 import io.restassured.response.Response;
@@ -14,6 +11,9 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.util.List;
+
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.Assert.*;
 
 public class OrderTests {
@@ -29,12 +29,16 @@ public class OrderTests {
         userClient = new UserClient();
         user = DataGenerator.getRandomUser();
 
-        // Регистрируем пользователя и получаем токен
-        Response response = userClient.createUser(user);
-        accessToken = response.as(AuthResponse.class).getAccessToken();
+        userClient.createUser(user);
+        AuthResponse authResponse = userClient.login(user).as(AuthResponse.class);
+        accessToken = authResponse.getAccessToken();
 
-        // Получаем список ингредиентов
-        ingredients = orderClient.getAllIngredients().jsonPath().getList("data._id");
+        IngredientsResponse ingredientsResponse = orderClient.getAllIngredients()
+                .then()
+                .extract()
+                .as(IngredientsResponse.class);
+
+        ingredients = DataGenerator.extractIngredientIds(ingredientsResponse);
     }
 
     @After
@@ -47,29 +51,41 @@ public class OrderTests {
     @Test
     @DisplayName("Создание заказа с авторизацией и валидными ингредиентами")
     public void testCreateOrderWithAuthAndValidIngredients() {
-        Order order = new Order();
-        order.setIngredients(ingredients.subList(0, 2)); // Берем первые два ингредиента
-
+        Order order = DataGenerator.createValidOrder(ingredients);
         Response response = orderClient.createOrder(order, accessToken);
-        response.then().statusCode(200);
 
         OrderResponse orderResponse = response.as(OrderResponse.class);
-        assertTrue(orderResponse.isSuccess());
-        assertNotNull(orderResponse.getName());
-        assertNotNull(orderResponse.getOrder().getNumber());
+
+        response.then()
+                .statusCode(200)
+                .body("success", equalTo(true))
+                .body("name", notNullValue())
+                .body("order", notNullValue())
+                .body("order.number", notNullValue())
+                .body("order.ingredients", notNullValue());
+
+        assertFalse("Список ингредиентов не должен быть пустым",
+                orderResponse.getOrder().getIngredients().isEmpty());
+
+        for (OrderResponse.OrderIngredient ingredient : orderResponse.getOrder().getIngredients()) {
+            assertNotNull("ID ингредиента не должен быть null", ingredient.get_id());
+            assertNotNull("Название ингредиента не должно быть null", ingredient.getName());
+            assertNotNull("Тип ингредиента не должен быть null", ingredient.getType());
+        }
     }
 
     @Test
     @DisplayName("Создание заказа без авторизации")
-    public void testCreateOrderWithoutAuth() {
-        Order order = new Order();
-        order.setIngredients(ingredients.subList(0, 2));
+    public void testGetUserOrdersWithoutAuth() {
+        OrderResponse.ErrorResponse errorResponse = orderClient.getUserOrders("")
+                .then()
+                .statusCode(401)
+                .extract()
+                .as(OrderResponse.ErrorResponse.class);
 
-        Response response = orderClient.createOrderWithoutAuth(order);
-        response.then().statusCode(200); // Документация говорит о редиректе, но API возвращает 200
-
-        OrderResponse orderResponse = response.as(OrderResponse.class);
-        assertTrue(orderResponse.isSuccess());
+        assertEquals("Сообщение об ошибке должно соответствовать",
+                "You should be authorised", errorResponse.getMessage());
+        assertFalse("Флаг success должен быть false", errorResponse.isSuccess());
     }
 
     @Test
@@ -95,29 +111,61 @@ public class OrderTests {
     }
 
     @Test
-    @DisplayName("Получение заказов конкретного пользователя")
-    public void testGetUserOrders() {
-        // Сначала создаем заказ
-        Order order = new Order();
-        order.setIngredients(ingredients.subList(0, 2));
-        orderClient.createOrder(order, accessToken);
+    @DisplayName("Создание заказа с авторизацией и минимальным набором ингредиентов")
+    public void testCreateOrderWithAuthAndMinimumIngredients() {
+        Order order = DataGenerator.createOrderWithMinimumIngredients(ingredients);
 
-        // Получаем заказы пользователя
-        Response response = orderClient.getUserOrders(accessToken);
-        response.then().statusCode(200);
+        Response response = orderClient.createOrder(order, accessToken);
+        OrderResponse orderResponse = response.as(OrderResponse.class);
 
-        assertTrue(response.path("success"));
-        assertNotNull(response.path("orders"));
-        assertTrue(response.path("orders.size()") instanceof Integer);
+        assertEquals(200, response.getStatusCode());
+        assertTrue("Order should be created successfully", orderResponse.isSuccess());
+        assertNotNull("Order name should not be null", orderResponse.getName());
+        assertNotNull("Order number should not be null", orderResponse.getOrder().getNumber());
     }
 
     @Test
-    @DisplayName("Получение заказов без авторизации")
-    public void testGetUserOrdersWithoutAuth() {
-        Response response = orderClient.getUserOrders("");
-        response.then().statusCode(401);
+    @DisplayName("Создание заказа с авторизацией и несколькими ингредиентами")
+    public void testCreateOrderWithAuthAndMultipleIngredients() {
+        Order order = DataGenerator.createOrderWithMultipleIngredients(ingredients);
 
-        assertEquals("You should be authorised", response.path("message"));
-        assertFalse(response.path("success"));
+        Response response = orderClient.createOrder(order, accessToken);
+        response.then().statusCode(200);
+
+        OrderResponse orderResponse = response.as(OrderResponse.class);
+        assertTrue(orderResponse.isSuccess());
+    }
+
+    @Test
+    @DisplayName("Получение заказов с авторизацией")
+    public void testGetUserOrdersWithAuth() {
+        Order testOrder = DataGenerator.createOrderWithMinimumIngredients(ingredients);
+        orderClient.createOrder(testOrder, accessToken);
+
+        UserOrdersResponse userOrders = orderClient.getUserOrders(accessToken)
+                .then()
+                .statusCode(200)
+                .extract()
+                .as(UserOrdersResponse.class);
+
+        assertTrue("Флаг success должен быть true", userOrders.isSuccess());
+        assertNotNull("Список заказов не должен быть null", userOrders.getOrders());
+        assertFalse("Список заказов не должен быть пустым", userOrders.getOrders().isEmpty());
+
+        UserOrdersResponse.OrderData lastOrder = userOrders.getOrders().get(0);
+        assertEquals("Статус заказа должен быть 'done'", "done", lastOrder.getStatus());
+        assertNotNull("Номер заказа не должен быть null", lastOrder.getNumber());
+        assertNotNull("Дата создания не должна быть null", lastOrder.getCreatedAt());
+
+        assertNotNull("Список ингредиентов не должен быть null", lastOrder.getIngredients());
+        assertFalse("Список ингредиентов не должен быть пустым", lastOrder.getIngredients().isEmpty());
+
+        for (String ingredientId : lastOrder.getIngredients()) {
+            assertNotNull("ID ингредиента не должен быть null", ingredientId);
+            assertFalse("ID ингредиента не должен быть пустым", ingredientId.trim().isEmpty());
+        }
+
+        assertTrue("total должно быть положительным числом", userOrders.getTotal() >= 0);
+        assertTrue("totalToday должно быть положительным числом", userOrders.getTotalToday() >= 0);
     }
 }

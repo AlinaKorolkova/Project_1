@@ -1,5 +1,6 @@
 package api.clients;
 
+import api.config.AppConfig;
 import api.models.Order;
 import io.qameta.allure.Step;
 import io.restassured.response.Response;
@@ -7,39 +8,38 @@ import io.restassured.response.Response;
 import static io.restassured.RestAssured.given;
 
 public class OrderClient {
-    private static final String BASE_URL = "https://stellarburgers.nomoreparties.site/api";
 
-    @Step("Создание заказа")
+    @Step("Создание заказа: Ингредиенты: {0} (с авторизацией)")
     public Response createOrder(Order order, String accessToken) {
         return given()
-                .header("Content-type", "application/json")
-                .header("Authorization", accessToken)
+                .header(AppConfig.CONTENT_TYPE_HEADER, AppConfig.APPLICATION_JSON)
+                .header(AppConfig.AUTHORIZATION_HEADER, accessToken)
                 .body(order)
                 .when()
-                .post(BASE_URL + "/orders");
+                .post(AppConfig.BASE_URL + AppConfig.ORDERS);
     }
 
-    @Step("Создание заказа без авторизации")
+    @Step("Создание заказа: Ингредиенты: {0} (без авторизации)")
     public Response createOrderWithoutAuth(Order order) {
         return given()
-                .header("Content-type", "application/json")
+                .header(AppConfig.CONTENT_TYPE_HEADER, AppConfig.APPLICATION_JSON)
                 .body(order)
                 .when()
-                .post(BASE_URL + "/orders");
+                .post(AppConfig.BASE_URL + AppConfig.ORDERS);
     }
 
-    @Step("Получение заказов от пользователей")
+    @Step("Получение заказов пользователя (токен: {0})")
     public Response getUserOrders(String accessToken) {
         return given()
-                .header("Authorization", accessToken)
+                .header(AppConfig.AUTHORIZATION_HEADER, accessToken)
                 .when()
-                .get(BASE_URL + "/orders");
+                .get(AppConfig.BASE_URL + AppConfig.ORDERS);
     }
 
-    @Step("Получение всех ингредиентов")
+    @Step("Получение списка всех ингредиентов")
     public Response getAllIngredients() {
         return given()
                 .when()
-                .get(BASE_URL + "/ingredients");
+                .get(AppConfig.BASE_URL + AppConfig.INGREDIENTS);
     }
 }

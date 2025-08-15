@@ -1,73 +1,78 @@
 package api.clients;
 
+import api.config.AppConfig;
 import api.models.AuthResponse;
 import api.models.User;
 import io.qameta.allure.Step;
 import io.restassured.response.Response;
 import io.restassured.specification.RequestSpecification;
+import org.junit.After;
 
 import static io.restassured.RestAssured.given;
+import static org.junit.Assert.assertEquals;
 
 public class UserClient {
-    private static final String BASE_URL = "https://stellarburgers.nomoreparties.site/api";
+    private UserClient userClient;
+    private String accessToken;
 
-
-    @Step("Создание пользователя")
+    @Step("Создание пользователя: {0}")
     public Response createUser(User user) {
         return given()
-                .header("Content-type", "application/json")
+                .header(AppConfig.CONTENT_TYPE_HEADER, AppConfig.APPLICATION_JSON)
                 .body(user)
                 .when()
-                .post(BASE_URL + "/auth/register");
+                .post(AppConfig.BASE_URL + AppConfig.AUTH_REGISTER);
     }
 
-    @Step("Авторизация")
+    @Step("Авторизация пользователя: {0}")
     public Response login(User user) {
         return given()
-                .header("Content-type", "application/json")
+                .header(AppConfig.CONTENT_TYPE_HEADER, AppConfig.APPLICATION_JSON)
                 .body(user)
                 .when()
-                .post(BASE_URL + "/auth/login");
+                .post(AppConfig.BASE_URL + AppConfig.AUTH_LOGIN);
     }
 
-    @Step("Успешная авторизация пользователя")
+    @Step("Успешная авторизация пользователя: {0}")
     public AuthResponse loginAndGetAuthResponse(User user) {
         Response response = login(user);
         AuthResponse authResponse = response.as(AuthResponse.class);
 
-        // Проверяем, что токен получен
-        if (authResponse.getAccessToken() == null || authResponse.getAccessToken().isEmpty()) {
-            throw new IllegalStateException("Access token not received in login response");
-        }
-
         return authResponse;
     }
 
-    @Step("Обновление данных пользователя")
+    @Step("Обновление данных пользователя: {0}")
     public Response updateUser(User user, String accessToken) {
-        // Создаем базовый запрос
         RequestSpecification request = given()
-                .header("Content-type", "application/json")
+                .header(AppConfig.CONTENT_TYPE_HEADER, AppConfig.APPLICATION_JSON)
                 .body(user);
 
-        // Добавляем заголовок Authorization только если токен не null и не пустой
-        if (accessToken != null && !accessToken.trim().isEmpty()) {
-            request.header("Authorization", accessToken);
-        }
+        request.header(AppConfig.AUTHORIZATION_HEADER, accessToken);
 
-        return request.when().patch(BASE_URL + "/auth/user");
+        return request.when().patch(AppConfig.BASE_URL + AppConfig.AUTH_USER);
     }
 
-    @Step("Удаление пользователя")
+    @Step("Удаление пользователя (токен: {0})")
     public Response deleteUser(String accessToken) {
-        // Создаем базовый запрос
-        RequestSpecification request = given();
+        RequestSpecification request = given()
+                .header(AppConfig.AUTHORIZATION_HEADER, accessToken);
 
-        // Добавляем заголовок Authorization только если токен не null и не пустой
-        if (accessToken != null && !accessToken.trim().isEmpty()) {
-            request.header("Authorization", accessToken);
+        Response response = request.when().delete(AppConfig.BASE_URL + AppConfig.AUTH_USER);
+
+        if (response.statusCode() != 200) {
+            System.err.println("Удаление пользователя не удалось. Код: " + response.statusCode() +
+                    ", Тело: " + response.body().asString());
+        } else {
+            System.out.println("Пользователь успешно удалён.");
         }
 
-        return request.when().delete(BASE_URL + "/auth/user");
+        return response;
     }
+        @After
+        public void tearDown() {
+            if (accessToken != null) {
+                Response response = userClient.deleteUser(accessToken);
+                assertEquals("Пользователь должен быть удалён", 200, response.statusCode());
+            }
+        }
 }

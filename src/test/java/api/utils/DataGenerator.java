@@ -1,8 +1,12 @@
 package api.utils;
 
+import api.models.IngredientsResponse;
+import api.models.Order;
 import api.models.User;
 
+import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.Collectors;
 
 public class DataGenerator {
     public static User getRandomUser() {
@@ -20,5 +24,40 @@ public class DataGenerator {
         user.setPassword("password");
         user.setName("Username");
         return user;
+    }
+
+    public static List<String> extractIngredientIds(IngredientsResponse ingredientsResponse) {
+        return ingredientsResponse.getData().stream()
+                .map(api.models.Ingredient::get_id)
+                .collect(Collectors.toList());
+    }
+
+    public static Order createOrderWithMinimumIngredients(List<String> ingredientIds) {
+        if (ingredientIds.size() < 2) {
+            throw new IllegalArgumentException("Need at least 2 ingredients to create valid order");
+        }
+        return new Order(List.of(ingredientIds.get(0), ingredientIds.get(1)));
+    }
+
+    public static Order createOrderWithMultipleIngredients(List<String> ingredientIds) {
+        if (ingredientIds.size() < 3) {
+            throw new IllegalArgumentException("Need at least 3 ingredients to test multiple ingredients case");
+        }
+        return new Order(ingredientIds.subList(0, 3));
+    }
+
+    public static Order createEmptyOrder() {
+        return new Order(List.of());
+    }
+
+    public static Order createOrderWithInvalidIngredient() {
+        return new Order(List.of("invalid_ingredient_hash"));
+    }
+
+    public static Order createValidOrder(List<String> ingredientIds) {
+        if (ingredientIds.size() < 2) {
+            throw new IllegalArgumentException("Для валидного заказа требуется минимум 2 ингредиента");
+        }
+        return new Order(ingredientIds.subList(0, 2));
     }
 }
