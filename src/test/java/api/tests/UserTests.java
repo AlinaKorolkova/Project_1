@@ -4,26 +4,31 @@ import api.clients.UserClient;
 import api.models.AuthResponse;
 import api.models.ErrorResponse;
 import api.models.User;
-import api.utils.DataGenerator;
+import com.github.javafaker.Faker;
 import io.qameta.allure.junit4.DisplayName;
+import io.restassured.RestAssured;
 import io.restassured.response.Response;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import static api.config.AppConfig.WRONG_PASSWORD;
+import static api.utils.DataGenerator.getRandomUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.junit.Assert.*;
 
 public class UserTests {
+    private final Faker faker = new Faker();
     private UserClient userClient;
     private User user;
     private String accessToken;
 
     @Before
     public void prepare() {
+        RestAssured.baseURI = "https://stellarburgers.nomoreparties.site";
         userClient = new UserClient();
-        user = DataGenerator.getRandomUser();
+        user = getRandomUser();
     }
 
     @After
@@ -50,8 +55,7 @@ public class UserTests {
     @Test
     @DisplayName("Создание пользователя с уже существующим email")
     public void shouldReturnErrorWhenUserWithSameEmailAlreadyExists() {
-        // Arrange
-        User testUser = DataGenerator.getRandomUser();
+        User testUser = getRandomUser();
         userClient.createUser(testUser)
                 .then()
                 .statusCode(200)
@@ -73,13 +77,6 @@ public class UserTests {
         response.then().statusCode(403);
     }
 
-    @Before
-    public void sprepare() {
-        userClient = new UserClient();
-        user = DataGenerator.getRandomUser();
-        userClient.createUser(user).then().statusCode(200);
-    }
-
     @Test
     @DisplayName("Авторизация пользователя с валидными данными")
     public void testLoginWithValidData() {
@@ -90,14 +87,14 @@ public class UserTests {
         assertTrue(authResponse.isSuccess());
         assertNotNull(authResponse.getAccessToken());
 
-        accessToken = authResponse.getAccessToken(); // для удаления в @After
+        accessToken = authResponse.getAccessToken();
     }
 
     @Test
     @DisplayName("Авторизация пользователя с неверным паролем")
     public void testLoginWithInvalidPassword() {
         userClient.createUser(user);
-        user.setPassword("wrongpassword");
+        user.setPassword(WRONG_PASSWORD);
         Response response = userClient.login(user);
         response.then().statusCode(401);
 
@@ -105,29 +102,11 @@ public class UserTests {
         assertFalse(response.path("success"));
     }
 
-    @DisplayName("Обновление данных пользователя с авторизацией")
-    public void testUpdateUserWithAuth() {
-        AuthResponse authResponse = userClient.loginAndGetAuthResponse(user);
-        accessToken = authResponse.getAccessToken();
-
-        String expectedName = "UpdatedUserName";
-        String expectedEmail = "updated.user@example.com";
-
-        user.setName(expectedName);
-        user.setEmail(expectedEmail);
-
-        Response response = userClient.updateUser(user, accessToken);
-        response.then().statusCode(200);
-
-        assertEquals(expectedName, response.path("user.name"));
-        assertEquals(expectedEmail, response.path("user.email"));
-    }
-
     @Test
     @DisplayName("Обновление данных пользователя без авторизации")
     public void testUpdateUserWithoutAuth() {
         userClient.createUser(user);
-        user.setName("NewName");
+        user.setName(faker.name().firstName());
 
         Response response = userClient.updateUser(user, "");
         response.then().statusCode(401);
@@ -139,7 +118,7 @@ public class UserTests {
     @Test
     @DisplayName("Создание пользователя без email")
     public void testCreateUserWithoutEmail() {
-        User userWithoutEmail = DataGenerator.getRandomUser();
+        User userWithoutEmail = getRandomUser();
         userWithoutEmail.setEmail(null);
 
         Response response = userClient.createUser(userWithoutEmail);

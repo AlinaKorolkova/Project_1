@@ -1,10 +1,12 @@
 package api.models;
 
 import lombok.Data;
+import com.google.gson.annotations.SerializedName;
 
 @Data
 public class Ingredient {
-    private String _id;
+    @SerializedName("_id")
+    private String id;
     private String name;
     private String type;
     private int proteins;
@@ -13,7 +15,10 @@ public class Ingredient {
     private int calories;
     private int price;
     private String image;
-    private String image_mobile;
-    private String image_large;
-    private int __v;
+    @SerializedName("image_mobile")
+    private String imageMobile;
+    @SerializedName("image_large")
+    private String imageLarge;
+    @SerializedName("__v")
+    private int v;
 }

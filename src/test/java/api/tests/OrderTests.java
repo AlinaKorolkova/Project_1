@@ -5,6 +5,7 @@ import api.clients.UserClient;
 import api.models.*;
 import api.utils.DataGenerator;
 import io.qameta.allure.junit4.DisplayName;
+import io.restassured.RestAssured;
 import io.restassured.response.Response;
 import org.junit.After;
 import org.junit.Before;
@@ -12,22 +13,20 @@ import org.junit.Test;
 
 import java.util.List;
 
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.Assert.*;
 
 public class OrderTests {
     private OrderClient orderClient;
     private UserClient userClient;
-    private User user;
     private String accessToken;
     private List<String> ingredients;
 
     @Before
     public void setUp() {
+        RestAssured.baseURI = "https://stellarburgers.nomoreparties.site";
         orderClient = new OrderClient();
         userClient = new UserClient();
-        user = DataGenerator.getRandomUser();
+        User user = DataGenerator.getRandomUser();
 
         userClient.createUser(user);
         AuthResponse authResponse = userClient.login(user).as(AuthResponse.class);
@@ -51,27 +50,28 @@ public class OrderTests {
     @Test
     @DisplayName("Создание заказа с авторизацией и валидными ингредиентами")
     public void testCreateOrderWithAuthAndValidIngredients() {
-        Order order = DataGenerator.createValidOrder(ingredients);
-        Response response = orderClient.createOrder(order, accessToken);
+        Order testOrder = DataGenerator.createOrderWithMinimumIngredients(ingredients);
 
-        OrderResponse orderResponse = response.as(OrderResponse.class);
-
-        response.then()
+        OrderResponse response = orderClient.createOrder(testOrder, accessToken)
+                .then()
                 .statusCode(200)
-                .body("success", equalTo(true))
-                .body("name", notNullValue())
-                .body("order", notNullValue())
-                .body("order.number", notNullValue())
-                .body("order.ingredients", notNullValue());
+                .extract()
+                .as(OrderResponse.class);
 
-        assertFalse("Список ингредиентов не должен быть пустым",
-                orderResponse.getOrder().getIngredients().isEmpty());
+        assertTrue(response.isSuccess());
+        assertNotNull(response.getName());
 
-        for (OrderResponse.OrderIngredient ingredient : orderResponse.getOrder().getIngredients()) {
-            assertNotNull("ID ингредиента не должен быть null", ingredient.get_id());
-            assertNotNull("Название ингредиента не должно быть null", ingredient.getName());
-            assertNotNull("Тип ингредиента не должен быть null", ingredient.getType());
-        }
+        OrderResponse.OrderData order = response.getOrder();
+        assertNotNull(order);
+        assertNotNull(order.getNumber());
+
+        assertNotNull(order.getIngredients());
+        assertFalse(order.getIngredients().isEmpty());
+
+        OrderResponse.OrderIngredient firstIngredient = order.getIngredients().get(0);
+        assertNotNull(firstIngredient.getId());
+        assertNotNull(firstIngredient.getName());
+        assertNotNull(firstIngredient.getType());
     }
 
     @Test

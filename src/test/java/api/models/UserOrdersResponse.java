@@ -1,5 +1,6 @@
 package api.models;
 
+import com.google.gson.annotations.SerializedName;
 import lombok.Data;
 
 import java.util.List;
@@ -14,7 +15,8 @@ public class UserOrdersResponse {
     @Data
     public static class OrderData {
         private List<String> ingredients;
-        private String _id;
+        @SerializedName("_id")
+        private String id;
         private String status;
         private String number;
         private String createdAt;
@@ -24,7 +26,8 @@ public class UserOrdersResponse {
 
     @Data
     public static class OrderIngredient {
-        private String _id;
+        @SerializedName("_id")
+        private String id;
         private String name;
         private String type;
     }

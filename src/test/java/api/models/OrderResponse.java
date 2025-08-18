@@ -1,10 +1,10 @@
 package api.models;
 
+import com.google.gson.annotations.SerializedName;
 import lombok.Data;
 
 import java.util.List;
 
-// OrderResponse.java
 @Data
 public class OrderResponse {
     private boolean success;
@@ -14,7 +14,8 @@ public class OrderResponse {
     @Data
     public static class OrderData {
         private List<OrderIngredient> ingredients; // Теперь это список объектов
-        private String _id;
+        @SerializedName("_id")
+        private String id;
         private String status;
         private String number;
         private String createdAt;
@@ -23,7 +24,8 @@ public class OrderResponse {
 
     @Data
     public static class OrderIngredient {
-        private String _id;
+        @SerializedName("_id")
+        private String id;
         private String name;
         private String type;
         private int proteins;

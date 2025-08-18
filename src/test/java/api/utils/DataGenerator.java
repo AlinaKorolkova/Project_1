@@ -18,17 +18,9 @@ public class DataGenerator {
         return user;
     }
 
-    public static User getExistingUser() {
-        User user = new User();
-        user.setEmail("test-data@yandex.ru");
-        user.setPassword("password");
-        user.setName("Username");
-        return user;
-    }
-
     public static List<String> extractIngredientIds(IngredientsResponse ingredientsResponse) {
         return ingredientsResponse.getData().stream()
-                .map(api.models.Ingredient::get_id)
+                .map(api.models.Ingredient::getId)
                 .collect(Collectors.toList());
     }
 
@@ -44,20 +36,5 @@ public class DataGenerator {
             throw new IllegalArgumentException("Need at least 3 ingredients to test multiple ingredients case");
         }
         return new Order(ingredientIds.subList(0, 3));
-    }
-
-    public static Order createEmptyOrder() {
-        return new Order(List.of());
-    }
-
-    public static Order createOrderWithInvalidIngredient() {
-        return new Order(List.of("invalid_ingredient_hash"));
-    }
-
-    public static Order createValidOrder(List<String> ingredientIds) {
-        if (ingredientIds.size() < 2) {
-            throw new IllegalArgumentException("Для валидного заказа требуется минимум 2 ингредиента");
-        }
-        return new Order(ingredientIds.subList(0, 2));
     }
 }

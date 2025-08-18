@@ -1,8 +1,12 @@
 package api.models;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
+@AllArgsConstructor
+@NoArgsConstructor
 public class User {
     private String email;
     private String password;
@@ -15,12 +19,5 @@ public class User {
                 name != null ? name : "null",
                 email != null ? email : "null"
         );
-    }
-    public static User createTestUser(String email, String password, String name) {
-        User user = new User();
-        user.setEmail(email);
-        user.setPassword(password);
-        user.setName(name);
-        return user;
     }
 }
